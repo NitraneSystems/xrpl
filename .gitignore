@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+cache/
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+
+# Hardhat / Foundry
+contracts/cache/
+contracts/artifacts/
+contracts/typechain-types/
+contracts/coverage/
+
+# FCE matching engine local/generated
+fce-matching-engine/.claude/
+fce-matching-engine/config/extension.env
+fce-matching-engine/**/deployed-addresses.json
+fce-matching-engine/**/autogen.go
+fce-matching-engine/results/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config overrides
+config/*.local.json
+
+# Logs
+*.log
+npm-debug.log*

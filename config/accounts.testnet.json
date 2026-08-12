@@ -1,0 +1,54 @@
+{
+  "network": "coston2",
+  "chainId": 114,
+  "personas": {
+    "deployer": {
+      "address": "0xDe8E0C7d20E265594d5cB60277E249544af92cC4",
+      "role": "Contract deploy + FXRP/USDT0 reserve"
+    },
+    "lead-trader-1": {
+      "address": "0x03182be182be76F11D1d136574190708844aE079",
+      "role": "Lead trader (drift testing Phase 9)"
+    },
+    "lead-trader-2": {
+      "address": "0xB1C314846C29d894db4a3CF6b557B92CFC6f18d5",
+      "role": "Lead trader (drift testing Phase 9)"
+    },
+    "follower-evm-1": {
+      "address": "0x965526BEdD25EF092aD434b0D803e2aF45C97aE0",
+      "role": "Follower EVM wallet 1"
+    },
+    "follower-evm-2": {
+      "address": "0x331227E8E3F6766Cc351684F0129dF2DC9578934",
+      "role": "Follower EVM wallet 2"
+    },
+    "follower-evm-3": {
+      "address": "0x3B7c2E629989B29368aDc97a081Ab39981110b60",
+      "role": "Follower EVM wallet 3"
+    },
+    "operator-relayer": {
+      "address": "0xF607BDd470d9CB47aB965446cf4b0029cEDdc6A1",
+      "role": "Operator / relayer (Phase 5/8)"
+    },
+    "tee-signing-key": {
+      "address": "0xdC642f787a86DA2013625D02eb9AE86080079Fb5",
+      "role": "PMW-controlled TEE signing key"
+    },
+    "ai-agent-signer": {
+      "address": "0xF7947052981A632877E65f97484bd4058653D2eE",
+      "role": "AI Agent FCE signer (Phase 6)"
+    }
+  },
+  "xrpl": {
+    "follower-fsa-1": {
+      "address": "r3mUNdxAaUGjTW8CcowGb7wdBABr1q5uTS",
+      "role": "XRPL testnet follower (Phase 8 FSA path)"
+    }
+  },
+  "tokens": {
+    "c2flr": "native",
+    "usdt0": "0xC1A5B41512496B80903D1f32d6dEa3a73212E71F",
+    "fxrp": "0x0b6A3645c240605887a5532109323A3E12273dc7"
+  },
+  "generatedAt": "2026-08-11T07:41:51.540Z"
+}

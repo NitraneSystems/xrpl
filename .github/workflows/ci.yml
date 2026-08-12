@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-test-smoke:
+    runs-on: ubuntu-latest
+    env:
+      FLARE_RPC_URL: https://coston2-api.flare.network/ext/C/rpc
+      FLARE_CHAIN_ID: "114"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Compile contracts
+        run: npm run compile
+
+      - name: Run contract tests
+        run: npm run test
+
+      - name: Address guard
+        run: bash scripts/ci/check-mainnet-addresses.sh
+
+      - name: Smoke test (Coston2 RPC)
+        run: npm run smoke
+
+      - name: Install FCE extension deps
+        run: npm install
+        working-directory: fce-matching-engine/typescript
+
+      - name: Build FCE extension
+        run: npm run build
+        working-directory: fce-matching-engine/typescript
+
+      - name: FCE Stage A canary (local)
+        run: npm run fce:smoke
+
+      - name: FCE Stage B canary (local)
+        run: npm run fce:smoke-stageB
+
+      - name: types-server /decode smoke
+        run: npm run types:decode-smoke -w scripts

@@ -1,0 +1,18 @@
+{
+  "chainId": 114,
+  "network": "coston2",
+  "contracts": {
+    "mirrorRegistry": "0x89b97Abba29e8a9B6338EA635B50cfdb0C9d0749",
+    "mirrorVault": "0x6Dcd79Bf9DEA6C6Da9790251A98476d393957ab9",
+    "mirrorFee": "0x356BFCa4a31E324F8Ea27c52EF23004432dccc43",
+    "mirrorLeaderboard": "0x824A6E2e3700112bb50c4551fB8c070FC8335b66",
+    "instructionSender": "0x76D00558EAd0D33Dc93911e40019947686D9A0b2"
+  },
+  "tokens": {
+    "usdt0": "0xC1A5B41512496B80903D1f32d6dEa3a73212E71F",
+    "fxrp": "0x0b6A3645c240605887a5532109323A3E12273dc7"
+  },
+  "executionVenue": "mock-sparkdex",
+  "deployedAt": "2026-08-11T07:49:36.563Z",
+  "deployer": "0xDe8E0C7d20E265594d5cB60277E249544af92cC4"
+}

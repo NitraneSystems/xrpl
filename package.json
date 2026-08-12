@@ -1,0 +1,25 @@
+{
+  "name": "mirror",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private copy trading on Flare, powered by FCC",
+  "workspaces": [
+    "contracts",
+    "scripts",
+    "frontend"
+  ],
+  "scripts": {
+    "smoke": "npm run smoke -w scripts",
+    "provision:personas": "npm run provision:personas -w scripts",
+    "provision:faucet-checklist": "npm run provision:faucet-checklist -w scripts",
+    "compile": "npm run compile -w contracts",
+    "test": "npm run test -w contracts",
+    "deploy:core": "npm run deploy:coston2 -w contracts",
+    "verify:core": "npm run verify:coston2 -w contracts",
+    "fce:smoke": "node fce-matching-engine/scripts/local-action-smoke.mjs",
+    "fce:smoke-stageB": "node fce-matching-engine/scripts/local-stageB-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
