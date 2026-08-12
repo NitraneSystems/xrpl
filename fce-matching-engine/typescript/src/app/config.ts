@@ -15,3 +15,4 @@ export const OP_COMMAND_SAY_GOODBYE = "SAY_GOODBYE";
 // Mirror matching-engine operations (Phase 3 Stage B).
 export const OP_TYPE_MIRROR = "MIRROR";
 export const OP_COMMAND_MATCH_V1 = "MATCH_V1";
+export const OP_COMMAND_TOPUP_V1 = "TOPUP_V1";

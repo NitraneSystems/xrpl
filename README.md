@@ -12,9 +12,17 @@ npm run smoke                       # Verify Coston2 RPC, registry, venue sanity
 npm run compile                     # Compile Solidity contracts (cancun)
 npm run test                        # Run unit + access-control + fuzz-style tests
 npm run deploy:core                 # Deploy to Coston2 (requires funded deployer)
+npm run deploy:venue                # MockSparkDexRouter + rewired Vault/Fee/Sender
+npm run venues:swap-loop            # 21 FTSO-priced mock swaps
+npm run venues:seed-blazeswap       # Phase 4B self-seeded BlazeSwap pool + one swap
+npm run fdc:cycle                   # 10 live Coston2 FDC settlement cycles (slow; needs verifier key)
+npm run e2e:load-followers          # Phase 11: 5-follower Stage B fan-out
+npm run e2e:adversarial-plaintext   # Phase 11: ciphertext-only public surfaces
+npm run demo:lifecycle              # Phase 11: one-command Coston2 demo (DEMO_SKIP_SLOW_FDC=1 optional)
 ```
 
-## Phase 0 + 1 Status
+Set `MIRROR_MOCK_VENUES=true` plus `MOCK_ENOSYS_CDP_ADDRESS` / `MOCK_FIRELIGHT_STRATEGY_ADDRESS` (see `.env.example`) to route CDP / Firelight signals through Phase 10 mocks.
+## Phase 0–5 Status
 
 - Monorepo layout with `contracts/`, `fce-matching-engine/`, `scripts/`, `config/`
 - Coston2 personas in `config/accounts.testnet.json`
@@ -39,15 +47,18 @@ docker compose up --build
 
 Set `TEE_MATCHING_ENGINE_ENDPOINT=http://localhost:6674` in `.env` and re-run `npm run smoke`.
 
-## Deployed on Coston2 (Phase 1)
+## Deployed on Coston2 (Phase 1 + 4)
 
 | Contract | Address |
 |----------|---------|
 | MirrorRegistry | `0x89b97Abba29e8a9B6338EA635B50cfdb0C9d0749` |
-| MirrorVault | `0x6Dcd79Bf9DEA6C6Da9790251A98476d393957ab9` |
-| MirrorFee | `0x356BFCa4a31E324F8Ea27c52EF23004432dccc43` |
+| MirrorVault | `0xF33222391fb153777c57C9e41a233D68E03Fe8c8` |
+| MirrorFee | `0x9B57787a5E90373d943403cf2571362302C4A079` |
 | MirrorLeaderboard | `0x824A6E2e3700112bb50c4551fB8c070FC8335b66` |
-| InstructionSender | `0x76D00558EAd0D33Dc93911e40019947686D9A0b2` |
+| InstructionSender | `0xEEE61189e46739fc06e1e12858dd4c88028d8CEd` |
+| MockSparkDexRouter | `0x6F3A431c74Ef7Ff30ed93569D4e8A43466E7F9e1` |
+| FtsoPriceReader | `0xa8190FED2eF7c2cbC843904F974ae4F9EaF1fEA1` |
+| BlazeSwap USDT0/FXRP pair (self-seeded) | `0xa0B211953a3d8f42E82AfB01303933DdA5c434fe` |
 
 Verify on explorer (requires `FLARE_EXPLORER_API_KEY`):
 
@@ -55,4 +66,4 @@ Verify on explorer (requires `FLARE_EXPLORER_API_KEY`):
 npm run verify:coston2 -w contracts
 ```
 
-See [docs/phaseImplementation.md](docs/phaseImplementation.md) and [docs/KNOWN-LIMITATIONS.md](docs/KNOWN-LIMITATIONS.md).
+See [docs/phaseImplementation.md](docs/phaseImplementation.md), [docs/KNOWN-LIMITATIONS.md](docs/KNOWN-LIMITATIONS.md), and [docs/SUBMISSION.md](docs/SUBMISSION.md) (PRD §12 mapping).

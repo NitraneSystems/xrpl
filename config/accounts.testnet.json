@@ -26,6 +26,14 @@
       "address": "0x3B7c2E629989B29368aDc97a081Ab39981110b60",
       "role": "Follower EVM wallet 3"
     },
+    "follower-evm-4": {
+      "address": "0xd7Cd0272D9442BbDC0F5B5C43bE1C3e76c5837F7",
+      "role": "Follower EVM wallet 4 (Phase 11 load)"
+    },
+    "follower-evm-5": {
+      "address": "0x70d7101FC7ab238CbB42265a728Db91815151c17",
+      "role": "Follower EVM wallet 5 (Phase 11 load)"
+    },
     "operator-relayer": {
       "address": "0xF607BDd470d9CB47aB965446cf4b0029cEDdc6A1",
       "role": "Operator / relayer (Phase 5/8)"

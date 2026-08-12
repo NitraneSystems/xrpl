@@ -1,0 +1,7 @@
+{
+  "xrplAddress": "r3mUNdxAaUGjTW8CcowGb7wdBABr1q5uTS",
+  "txHash": "E63145F0BA2BC637A5E3455BF7B4C674CFBBA9BE14C71EB63161D241AB023C39",
+  "state": "failed",
+  "updatedAt": "2026-08-12T05:36:04.386Z",
+  "message": "Payment prepare missing abiEncodedRequest: {\"status\":\"INVALID: TRANSACTION DOES NOT EXIST\"}"
+}

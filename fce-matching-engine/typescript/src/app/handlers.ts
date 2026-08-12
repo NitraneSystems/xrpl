@@ -20,9 +20,12 @@ import {
   OP_COMMAND_SAY_GOODBYE,
   OP_COMMAND_SAY_HELLO,
   OP_COMMAND_MATCH_V1,
+  OP_COMMAND_TOPUP_V1,
   OP_TYPE_MIRROR,
   OP_TYPE_GREETING,
 } from "./config.js";
+import { appendOutcome } from "./outcomeLog.js";
+import { encodeFunctionData, getAddress } from "viem";
 
 // --- Extension state ---------------------------------------------------------
 // Serialized by the framework; no locking needed here.
@@ -44,6 +47,7 @@ export function register(framework: Framework): void {
   framework.handle(OP_TYPE_GREETING, OP_COMMAND_SAY_HELLO, handleSayHello);
   framework.handle(OP_TYPE_GREETING, OP_COMMAND_SAY_GOODBYE, handleSayGoodbye);
   framework.handle(OP_TYPE_MIRROR, OP_COMMAND_MATCH_V1, handleMirrorMatchStageB);
+  framework.handle(OP_TYPE_MIRROR, OP_COMMAND_TOPUP_V1, handleMirrorTopUpV1);
 }
 
 /** Snapshot returned by GET /state. Mirrors the Go State struct. */
@@ -200,6 +204,18 @@ export async function handleMirrorMatchStageB(msg: string): Promise<HandlerResul
   const direction = parsed.direction;
   const sizePct = parsed.sizePct; // basis points out of 10_000
   const recipient = parsed.recipient;
+  const venueHint = String(
+    parsed.venue ?? parsed.strategyKind ?? process.env.EXECUTION_VENUE ?? "mock-sparkdex",
+  ).toLowerCase();
+  const mockVenuesEnabled = process.env.MIRROR_MOCK_VENUES === "true";
+
+  // Phase 10 mock venues: CDP / Firelight — same instruction payload shape, no FTSO swap path.
+  if (
+    mockVenuesEnabled &&
+    (venueHint === "enosys-cdp" || venueHint === "firelight-strategy")
+  ) {
+    return buildMockVenueStageB(parsed, venueHint, sizePct);
+  }
 
   if (typeof asset !== "string" || (asset !== "FXRP" && asset !== "USDT0")) {
     return [null, 0, "signal.asset must be FXRP or USDT0"];
@@ -210,7 +226,19 @@ export async function handleMirrorMatchStageB(msg: string): Promise<HandlerResul
   if (typeof sizePct !== "number" || !Number.isFinite(sizePct) || sizePct <= 0) {
     return [null, 0, "signal.sizePct must be a positive number (bps)"];
   }
-  if (typeof recipient !== "string" || !recipient.startsWith("0x") || recipient.length !== 42) {
+
+  type FollowerAlloc = { address: string; allocationBps: number };
+  const followersRaw = Array.isArray(parsed.followers) ? (parsed.followers as FollowerAlloc[]) : null;
+  if (followersRaw && followersRaw.length > 0) {
+    for (const f of followersRaw) {
+      if (typeof f.address !== "string" || !f.address.startsWith("0x") || f.address.length !== 42) {
+        return [null, 0, "followers[].address must be a 20-byte hex address"];
+      }
+      if (typeof f.allocationBps !== "number" || f.allocationBps <= 0) {
+        return [null, 0, "followers[].allocationBps must be positive"];
+      }
+    }
+  } else if (typeof recipient !== "string" || !recipient.startsWith("0x") || recipient.length !== 42) {
     return [null, 0, "signal.recipient must be a 20-byte hex address string"];
   }
 
@@ -220,8 +248,6 @@ export async function handleMirrorMatchStageB(msg: string): Promise<HandlerResul
   if (!rpcUrl) return [null, 0, "missing FLARE_RPC_URL"];
 
   const { createPublicClient, http, getAddress, encodeFunctionData } = await import("viem");
-  // viem's `Chain` type is stricter than what we need here.
-  // For an MVP inside the TEE, we only require the chain id for encoding.
   const client = createPublicClient({ chain: { id: 114 } as any, transport: http(rpcUrl) });
 
   const REGISTRY = "0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019";
@@ -260,25 +286,21 @@ export async function handleMirrorMatchStageB(msg: string): Promise<HandlerResul
     args: ["FtsoV2"],
   })) as `0x${string}`;
 
-  await client.readContract({
+  const fxrpFeed = (await client.readContract({
     address: ftsoV2,
     abi: FTSO_ABI,
     functionName: "getFeedByIdInWei",
     args: [FXRP_USD_FEED_ID],
-  });
-  await client.readContract({
+  })) as [bigint, bigint];
+  const usdt0Feed = (await client.readContract({
     address: ftsoV2,
     abi: FTSO_ABI,
     functionName: "getFeedByIdInWei",
     args: [USDT0_USD_FEED_ID],
-  });
-
-  // --- 4) Position sizing (MVP hardcap) -------------------------------
-  // We model sizePct as bps out of 10_000 of a fixed notional cap.
-  const sizePctBps = BigInt(Math.trunc(sizePct));
-  const notionalCapWei = 1_000_000n * 10n ** 18n;
-  const notionalWei = (notionalCapWei * sizePctBps) / 10_000n;
-  if (notionalWei === 0n) return [null, 0, "sizing produced zero notional"];
+  })) as [bigint, bigint];
+  const fxrpUsd = fxrpFeed[0];
+  const usdt0Usd = usdt0Feed[0];
+  if (fxrpUsd === 0n || usdt0Usd === 0n) return [null, 0, "ftso returned zero price"];
 
   // Resolve token addresses via ContractRegistry (no reliance on env vars).
   const FXRP_ASSET_MANAGER = "AssetManagerFXRP";
@@ -296,7 +318,6 @@ export async function handleMirrorMatchStageB(msg: string): Promise<HandlerResul
   let fxrpToken: `0x${string}`;
   let usdt0Token: `0x${string}`;
 
-  // Optional env overrides (useful in TEE deployments where filesystem/config access differs).
   if (process.env.C2_FXRP_ADDRESS && process.env.C2_FXRP_ADDRESS.startsWith("0x")) {
     fxrpToken = getAddress(process.env.C2_FXRP_ADDRESS as `0x${string}`);
   } else {
@@ -331,53 +352,305 @@ export async function handleMirrorMatchStageB(msg: string): Promise<HandlerResul
     })) as `0x${string}`;
   }
 
-  const tokenIn = direction === "BUY" ? usdt0Token : fxrpToken;
-  const tokenOut = direction === "BUY" ? fxrpToken : usdt0Token;
+  // --- 4) Position sizing (MVP hardcap) -------------------------------
+  // We model sizePct as bps out of 10_000 of a fixed notional cap.
+  const sizePctBps = BigInt(Math.trunc(sizePct));
+  const notionalCapWei = 1_000_000n * 10n ** 18n;
+  const baseNotionalWei = (notionalCapWei * sizePctBps) / 10_000n;
+  if (baseNotionalWei === 0n) return [null, 0, "sizing produced zero notional"];
 
-  // --- 5) Build exactInputSingle calldata -----------------------------
-  // Swap Router ABI parity: Uniswap V3 exactInputSingle tokenIn/tokenOut.
-  const exactInputSingleAbi = [
-    {
-      name: "exactInputSingle",
-      type: "function",
-      stateMutability: "nonpayable",
-      inputs: [
-        { name: "tokenIn", type: "address" },
-        { name: "tokenOut", type: "address" },
-        { name: "fee", type: "uint24" },
-        { name: "recipient", type: "address" },
-        { name: "deadline", type: "uint256" },
-        { name: "amountIn", type: "uint256" },
-        { name: "amountOutMinimum", type: "uint256" },
-        { name: "sqrtPriceLimitX96", type: "uint160" },
-      ],
-      outputs: [{ name: "amountOut", type: "uint256" }],
-    },
-  ];
+  const followersList: FollowerAlloc[] =
+    followersRaw && followersRaw.length > 0
+      ? followersRaw
+      : [{ address: recipient as string, allocationBps: 10_000 }];
 
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const deadline = now + 300n;
-  const fee = 3000n;
-  const amountOutMinimum = 0n;
-  const sqrtPriceLimitX96 = 0n;
+  const builds: Array<{ to: string; data: string; venue: string; fee: number; recipient: string; amountIn: string }> =
+    [];
 
-  const recipientAddr = getAddress(recipient as `0x${string}`);
-  const calldata = encodeFunctionData({
-    abi: exactInputSingleAbi,
-    functionName: "exactInputSingle",
-    args: [
-      tokenIn,
-      tokenOut,
-      Number(fee),
-      recipientAddr,
-      deadline,
-      notionalWei,
-      amountOutMinimum,
-      sqrtPriceLimitX96,
-    ],
+  for (const f of followersList) {
+    const allocBps = BigInt(Math.trunc(f.allocationBps));
+    const notionalWei = (baseNotionalWei * allocBps) / 10_000n;
+    if (notionalWei === 0n) continue;
+
+    const tokenIn = direction === "BUY" ? usdt0Token : fxrpToken;
+    const tokenOut = direction === "BUY" ? fxrpToken : usdt0Token;
+    const priceIn = direction === "BUY" ? usdt0Usd : fxrpUsd;
+    const priceOut = direction === "BUY" ? fxrpUsd : usdt0Usd;
+    const expectedOut = (notionalWei * priceIn) / priceOut;
+    const amountOutMinimum = (expectedOut * 9900n) / 10_000n;
+    if (amountOutMinimum === 0n) return [null, 0, "sizing produced zero minOut"];
+
+    const recipientAddr = getAddress(f.address as `0x${string}`);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const deadline = now + 300n;
+    const venue = (process.env.EXECUTION_VENUE ?? "mock-sparkdex").toLowerCase();
+
+    let to: `0x${string}`;
+    let calldata: `0x${string}`;
+
+    if (venue === "blazeswap-v2") {
+      const router = process.env.BLAZESWAP_ROUTER_ADDRESS;
+      if (!router) return [null, 0, "missing BLAZESWAP_ROUTER_ADDRESS"];
+      to = getAddress(router as `0x${string}`);
+      const v2Abi = [
+        {
+          name: "swapExactTokensForTokens",
+          type: "function",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "amountIn", type: "uint256" },
+            { name: "amountOutMin", type: "uint256" },
+            { name: "path", type: "address[]" },
+            { name: "to", type: "address" },
+            { name: "deadline", type: "uint256" },
+          ],
+          outputs: [{ name: "amounts", type: "uint256[]" }],
+        },
+      ] as const;
+      calldata = encodeFunctionData({
+        abi: v2Abi,
+        functionName: "swapExactTokensForTokens",
+        args: [notionalWei, amountOutMinimum, [tokenIn, tokenOut], recipientAddr, deadline],
+      });
+    } else {
+      const router = process.env.MOCK_SPARKDEX_ROUTER_ADDRESS || "";
+      if (!router) return [null, 0, "missing MOCK_SPARKDEX_ROUTER_ADDRESS"];
+      to = getAddress(router as `0x${string}`);
+      const exactInputSingleAbi = [
+        {
+          name: "exactInputSingle",
+          type: "function",
+          stateMutability: "nonpayable",
+          inputs: [
+            {
+              name: "params",
+              type: "tuple",
+              components: [
+                { name: "tokenIn", type: "address" },
+                { name: "tokenOut", type: "address" },
+                { name: "fee", type: "uint24" },
+                { name: "recipient", type: "address" },
+                { name: "deadline", type: "uint256" },
+                { name: "amountIn", type: "uint256" },
+                { name: "amountOutMinimum", type: "uint256" },
+                { name: "sqrtPriceLimitX96", type: "uint160" },
+              ],
+            },
+          ],
+          outputs: [{ name: "amountOut", type: "uint256" }],
+        },
+      ] as const;
+      calldata = encodeFunctionData({
+        abi: exactInputSingleAbi,
+        functionName: "exactInputSingle",
+        args: [
+          {
+            tokenIn,
+            tokenOut,
+            fee: 500,
+            recipient: recipientAddr,
+            deadline,
+            amountIn: notionalWei,
+            amountOutMinimum,
+            sqrtPriceLimitX96: 0n,
+          },
+        ],
+      });
+    }
+
+    builds.push({
+      to,
+      data: calldata,
+      venue,
+      fee: venue === "blazeswap-v2" ? 0 : 500,
+      recipient: recipientAddr,
+      amountIn: notionalWei.toString(),
+    });
+  }
+
+  if (builds.length === 0) return [null, 0, "fan-out produced zero instructions"];
+
+  const payload =
+    builds.length === 1
+      ? { to: builds[0]!.to, data: builds[0]!.data, venue: builds[0]!.venue, fee: builds[0]!.fee }
+      : { fanOut: true, instructions: builds, venue: builds[0]!.venue };
+
+  // Private outcome stub for AI agent (no signal plaintext beyond sizing aggregates).
+  const leadAddr =
+    typeof parsed.lead === "string" && parsed.lead.startsWith("0x")
+      ? parsed.lead
+      : builds[0]!.recipient;
+  appendOutcome({
+    lead: leadAddr,
+    timestamp: Math.floor(Date.now() / 1000),
+    pnlBps: 0,
+    direction: direction as "BUY" | "SELL",
+    sizePct: Math.trunc(sizePct),
   });
 
-  // --- 6) Respond -------------------------------------------------------
-  // Return calldata bytes only; nothing else. TEE proxy signs the action result.
-  return [calldata, 1, null];
+  return [bytesToHex(Buffer.from(JSON.stringify(payload), "utf-8")), 1, null];
+}
+
+/**
+ * Phase 10 mock venue Stage B — Enosys CDP or Firelight strategy calldata.
+ * Same response shape as swap path: { to, data, venue } or fan-out batch.
+ */
+function buildMockVenueStageB(
+  parsed: any,
+  venue: "enosys-cdp" | "firelight-strategy",
+  sizePct: unknown,
+): HandlerResult {
+  if (typeof sizePct !== "number" || !Number.isFinite(sizePct) || sizePct <= 0) {
+    return [null, 0, "signal.sizePct must be a positive number (bps)"];
+  }
+
+  type FollowerAlloc = { address: string; allocationBps: number };
+  const followersRaw = Array.isArray(parsed.followers) ? (parsed.followers as FollowerAlloc[]) : null;
+  const recipient = parsed.recipient;
+  let targets: FollowerAlloc[];
+  if (followersRaw && followersRaw.length > 0) {
+    targets = followersRaw;
+  } else if (typeof recipient === "string" && recipient.startsWith("0x") && recipient.length === 42) {
+    targets = [{ address: recipient, allocationBps: 10_000 }];
+  } else {
+    return [null, 0, "signal.recipient or followers required for mock venue"];
+  }
+
+  const sizePctBps = BigInt(Math.trunc(sizePct));
+  // FXRP 6 decimals notional cap for mock venues
+  const notionalCap = 1_000_000n * 10n ** 6n;
+  const baseNotional = (notionalCap * sizePctBps) / 10_000n;
+
+  const builds: Array<{ to: string; data: string; venue: string; recipient: string; amountIn: string }> = [];
+
+  for (const f of targets) {
+    const notional = (baseNotional * BigInt(Math.trunc(f.allocationBps))) / 10_000n;
+    if (notional === 0n) continue;
+    const recipientAddr = getAddress(f.address as `0x${string}`);
+
+    if (venue === "enosys-cdp") {
+      const cdp = process.env.MOCK_ENOSYS_CDP_ADDRESS;
+      if (!cdp) return [null, 0, "missing MOCK_ENOSYS_CDP_ADDRESS"];
+      const to = getAddress(cdp as `0x${string}`);
+      const mintAmount = notional / 2n;
+      const abi = [
+        {
+          type: "function",
+          name: "openCdp",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "collateralAmount", type: "uint256" },
+            { name: "mintAmount", type: "uint256" },
+          ],
+          outputs: [],
+        },
+      ] as const;
+      const data = encodeFunctionData({
+        abi,
+        functionName: "openCdp",
+        args: [notional, mintAmount],
+      });
+      builds.push({ to, data, venue, recipient: recipientAddr, amountIn: notional.toString() });
+    } else {
+      const strat = process.env.MOCK_FIRELIGHT_STRATEGY_ADDRESS;
+      if (!strat) return [null, 0, "missing MOCK_FIRELIGHT_STRATEGY_ADDRESS"];
+      const to = getAddress(strat as `0x${string}`);
+      const abi = [
+        {
+          type: "function",
+          name: "deposit",
+          stateMutability: "nonpayable",
+          inputs: [{ name: "assets", type: "uint256" }],
+          outputs: [{ name: "shares", type: "uint256" }],
+        },
+      ] as const;
+      const data = encodeFunctionData({
+        abi,
+        functionName: "deposit",
+        args: [notional],
+      });
+      builds.push({ to, data, venue, recipient: recipientAddr, amountIn: notional.toString() });
+    }
+  }
+
+  if (builds.length === 0) return [null, 0, "mock venue fan-out produced zero instructions"];
+
+  const leadAddr =
+    typeof parsed.lead === "string" && parsed.lead.startsWith("0x")
+      ? parsed.lead
+      : builds[0]!.recipient;
+  appendOutcome({
+    lead: leadAddr,
+    timestamp: Math.floor(Date.now() / 1000),
+    pnlBps: 0,
+    direction: "BUY",
+    sizePct: Math.trunc(sizePct as number),
+  });
+
+  const payload =
+    builds.length === 1
+      ? { to: builds[0]!.to, data: builds[0]!.data, venue: builds[0]!.venue, fee: 0 }
+      : { fanOut: true, instructions: builds, venue };
+
+  return [bytesToHex(Buffer.from(JSON.stringify(payload), "utf-8")), 1, null];
+}
+
+/**
+ * TOPUP_V1 — pre-authorized collateral top-up via MockKineticPool.supply calldata.
+ * Message hex JSON: { follower, lead, amountWei, kineticPool }
+ */
+export function handleMirrorTopUpV1(msg: string): HandlerResult {
+  let raw: Uint8Array;
+  try {
+    raw = hexToBytes(msg);
+  } catch (e) {
+    return [null, 0, `decoding request: invalid hex: ${String(e)}`];
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(Buffer.from(raw).toString("utf-8")) as Record<string, unknown>;
+  } catch (e) {
+    return [null, 0, `decoding request: ${String(e)}`];
+  }
+
+  const follower = typeof parsed.follower === "string" ? parsed.follower : "";
+  const lead = typeof parsed.lead === "string" ? parsed.lead : "";
+  const kineticPool =
+    typeof parsed.kineticPool === "string"
+      ? parsed.kineticPool
+      : process.env.MOCK_KINETIC_POOL_ADDRESS ?? "";
+  const amountWei = BigInt(String(parsed.amountWei ?? "0"));
+
+  if (!follower.startsWith("0x") || !kineticPool.startsWith("0x") || amountWei <= 0n) {
+    return [null, 0, "invalid top-up payload"];
+  }
+
+  const supplyAbi = [
+    {
+      type: "function",
+      name: "supply",
+      stateMutability: "nonpayable",
+      inputs: [{ name: "amount", type: "uint256" }],
+      outputs: [],
+    },
+  ] as const;
+
+  const calldata = encodeFunctionData({
+    abi: supplyAbi,
+    functionName: "supply",
+    args: [amountWei],
+  });
+
+  const payload = {
+    to: kineticPool,
+    data: calldata,
+    venue: "mock-kinetic",
+    follower,
+    lead,
+    amountWei: amountWei.toString(),
+    op: "TOPUP_V1",
+  };
+
+  return [bytesToHex(Buffer.from(JSON.stringify(payload), "utf-8")), 1, null];
 }

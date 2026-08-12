@@ -38,6 +38,7 @@ describe("MirrorVault fuzz-style settleBatch", function () {
     );
 
     await vault.connect(owner).setInstructionSender(await instructionSender.getAddress());
+    await vault.connect(owner).setLegacySettleBatchEnabled(true);
 
     await fxrp.mint(follower.address, ethers.parseEther("1000000"));
     await fxrp.connect(follower).approve(await vault.getAddress(), ethers.MaxUint256);

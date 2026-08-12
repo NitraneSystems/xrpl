@@ -42,6 +42,7 @@ describe("MirrorVault", function () {
     await instructionSender.waitForDeployment();
 
     await vault.connect(owner).setInstructionSender(await instructionSender.getAddress());
+    await vault.connect(owner).setLegacySettleBatchEnabled(true);
 
     await fxrp.mint(follower.address, ethers.parseEther("1000"));
     await fxrp.connect(follower).approve(await vault.getAddress(), ethers.MaxUint256);
@@ -79,6 +80,21 @@ describe("MirrorVault", function () {
 
     await instructionSender.connect(tee).settleBatch(settlements, 0);
     expect(await vault.getBalance(follower.address, lead.address)).to.equal(ethers.parseEther("110"));
+  });
+
+  it("Phase 5: settleBatch reverts when legacySettleBatchEnabled is false", async function () {
+    await vault.connect(owner).setLegacySettleBatchEnabled(false);
+    const settlements = [
+      {
+        follower: follower.address,
+        lead: lead.address,
+        balanceDelta: ethers.parseEther("1"),
+        nonce: 99n,
+      },
+    ];
+    await expect(
+      instructionSender.connect(tee).settleBatch(settlements, await instructionSender.batchNonce())
+    ).to.be.revertedWithCustomError(vault, "ProofRequiredUseSettleFromProof");
   });
 
   it("finalizes withdrawal via InstructionSender", async function () {

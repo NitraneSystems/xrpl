@@ -52,3 +52,6 @@ jobs:
 
       - name: types-server /decode smoke
         run: npm run types:decode-smoke -w scripts
+
+      # Live `npm run fdc:cycle` (10 Coston2 FDC rounds) is intentionally not in PR CI:
+      # it needs verifier/DA keys and ~15–30 minutes. Run locally against Coston2.

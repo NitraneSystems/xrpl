@@ -44,7 +44,7 @@ describe("MirrorFee", function () {
 
     await fee.connect(owner).setInstructionSender(await instructionSender.getAddress());
 
-    await registry.connect(lead).registerLead(0, 200, 0, ethers.ZeroHash); // 10% fee (200/2000)
+    await registry.connect(lead).registerLead(0, 200, 0, ethers.ZeroHash);
     await fxrp.mint(await fee.getAddress(), ethers.parseEther("10000"));
   });
 
@@ -60,47 +60,25 @@ describe("MirrorFee", function () {
     ];
 
     await instructionSender.connect(tee).accrueFees(accruals, 0);
-
-    // gross = 1000 * 200/2000 = 100; protocol = 10; net = 90
     expect(await fee.accruedFees(lead.address)).to.equal(ethers.parseEther("90"));
   });
 
-  it("allows lead to claim accrued fees", async function () {
-    const accruals = [
-      {
-        lead: lead.address,
-        follower: follower.address,
-        profit: ethers.parseEther("1000"),
-        epochId: 1n,
-      },
-    ];
-    await instructionSender.connect(tee).accrueFees(accruals, 0);
-
-    const before = await fxrp.balanceOf(lead.address);
-    await fee.connect(lead).claim(lead.address);
-    const after = await fxrp.balanceOf(lead.address);
-
-    expect(after - before).to.equal(ethers.parseEther("90"));
+  it("blocks unguarded claim until FDC release", async function () {
+    await instructionSender.connect(tee).accrueFees(
+      [{ lead: lead.address, follower: follower.address, profit: ethers.parseEther("1000"), epochId: 1n }],
+      0
+    );
+    await expect(fee.connect(lead).claim(lead.address)).to.be.revertedWithCustomError(fee, "ProofRequired");
   });
 
   it("reverts claim when nothing accrued", async function () {
-    await expect(fee.connect(lead).claim(lead.address)).to.be.revertedWithCustomError(
-      fee,
-      "NothingToClaim"
-    );
-  });
-
-  it("reverts releaseFee with zero proof id", async function () {
-    await expect(fee.connect(lead).releaseFee(ethers.ZeroHash)).to.be.revertedWithCustomError(
-      fee,
-      "InvalidProof"
-    );
+    await expect(fee.connect(lead).claim(lead.address)).to.be.revertedWithCustomError(fee, "ProofRequired");
   });
 });
 
 describe("MirrorFee claim math", function () {
-  it("claims correct net fee at 10% rate", async function () {
-    const [owner, lead, follower, tee] = await ethers.getSigners();
+  it("quotes correct net fee at 10% rate", async function () {
+    const [owner, lead] = await ethers.getSigners();
 
     const MockFXRP = await ethers.getContractFactory("MockFXRP");
     const fxrp = await MockFXRP.deploy();
@@ -111,32 +89,7 @@ describe("MirrorFee claim math", function () {
     const Fee = await ethers.getContractFactory("MirrorFee");
     const fee = await Fee.deploy(await fxrp.getAddress(), await registry.getAddress(), owner.address);
 
-    const Vault = await ethers.getContractFactory("MirrorVault");
-    const vault = await Vault.deploy(await fxrp.getAddress(), owner.address);
-
-    const Sender = await ethers.getContractFactory("InstructionSender");
-    const instructionSender = await Sender.deploy(
-      await vault.getAddress(),
-      await fee.getAddress(),
-      await registry.getAddress(),
-      tee.address,
-      owner.address
-    );
-
-    await fee.connect(owner).setInstructionSender(await instructionSender.getAddress());
-    await registry.connect(lead).registerLead(0, 200, 0, ethers.ZeroHash); // 200/2000 = 10%
-    await fxrp.mint(await fee.getAddress(), ethers.parseEther("10000"));
-
-    await instructionSender.connect(tee).accrueFees(
-      [{ lead: lead.address, follower: follower.address, profit: ethers.parseEther("1000"), epochId: 1n }],
-      0
-    );
-
-    // gross = 1000 * 200 / 2000 = 100; protocol = 10; net = 90
-    expect(await fee.accruedFees(lead.address)).to.equal(ethers.parseEther("90"));
-
-    const before = await fxrp.balanceOf(lead.address);
-    await fee.connect(lead).claim(lead.address);
-    expect(await fxrp.balanceOf(lead.address) - before).to.equal(ethers.parseEther("90"));
+    await registry.connect(lead).registerLead(0, 200, 0, ethers.ZeroHash);
+    expect(await fee.quoteNetFee(lead.address, ethers.parseEther("1000"))).to.equal(ethers.parseEther("90"));
   });
 });

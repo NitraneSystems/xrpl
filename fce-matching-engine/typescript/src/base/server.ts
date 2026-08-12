@@ -19,6 +19,7 @@ import {
   type ReportStateFunc,
   type StateResponse,
 } from "./types.js";
+import { getAllOutcomes, getOutcomesForLead } from "../app/outcomeLog.js";
 
 export class Server {
   readonly extPort: number;
@@ -97,7 +98,20 @@ export class Server {
       if (method === "GET") return this.processState();
       return [405, "method not allowed"];
     }
+    if (clean === "/internal/outcome-log") {
+      if (method !== "GET") return [405, "method not allowed"];
+      return this.processOutcomeLog(path);
+    }
     return [404, "not found"];
+  }
+
+  private processOutcomeLog(path: string): [number, unknown] {
+    const token = process.env.TEE_INTERNAL_TOKEN;
+    if (!token) return [503, { error: "TEE_INTERNAL_TOKEN not configured" }];
+    const qs = path.includes("?") ? new URLSearchParams(path.split("?")[1]) : new URLSearchParams();
+    const lead = qs.get("lead");
+    const events = lead ? getOutcomesForLead(lead) : getAllOutcomes();
+    return [200, { events }];
   }
 
   // --- handlers ----------------------------------------------------------
@@ -196,6 +210,16 @@ export class Server {
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): Promise<void> {
+    const url = req.url ?? "";
+    const clean = url.split("?")[0];
+    if (clean === "/internal/outcome-log") {
+      const expected = process.env.TEE_INTERNAL_TOKEN;
+      const auth = req.headers.authorization ?? "";
+      if (!expected || auth !== `Bearer ${expected}`) {
+        return send(res, 401, { error: "unauthorized" });
+      }
+    }
+
     let body = "";
     try {
       body = await readBody(req);
@@ -205,7 +229,7 @@ export class Server {
 
     const [status, payload] = await this.handleRequest(
       req.method ?? "",
-      req.url ?? "",
+      url,
       body,
     );
     send(res, status, payload);

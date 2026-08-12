@@ -7,7 +7,10 @@
     "test": "hardhat test",
     "clean": "hardhat clean",
     "deploy:coston2": "hardhat run scripts/01-deploy-core.ts --network coston2",
-    "verify:coston2": "hardhat run scripts/02-verify-core.ts --network coston2"
+    "verify:coston2": "hardhat run scripts/02-verify-core.ts --network coston2",
+    "deploy:venue": "hardhat run scripts/03-deploy-venue.ts --network coston2",
+    "deploy:phase89": "hardhat run scripts/04-deploy-phase89.ts --network coston2",
+    "deploy:phase10": "hardhat run scripts/05-deploy-phase10.ts --network coston2"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",

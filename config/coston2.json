@@ -2,17 +2,47 @@
   "chainId": 114,
   "network": "coston2",
   "contracts": {
-    "mirrorRegistry": "0x89b97Abba29e8a9B6338EA635B50cfdb0C9d0749",
-    "mirrorVault": "0x6Dcd79Bf9DEA6C6Da9790251A98476d393957ab9",
-    "mirrorFee": "0x356BFCa4a31E324F8Ea27c52EF23004432dccc43",
-    "mirrorLeaderboard": "0x824A6E2e3700112bb50c4551fB8c070FC8335b66",
-    "instructionSender": "0x76D00558EAd0D33Dc93911e40019947686D9A0b2"
+    "mirrorRegistry": "0xfF4f9a603ebd126Db2BEc88A88a0fae6B2fB8065",
+    "mirrorVault": "0x283aA87660cB02D1ffcEDd028B401766C076BdB4",
+    "mirrorFee": "0x8941c5ecA5Be7509Adf77e73A69187454Fcf1dEC",
+    "mirrorLeaderboard": "0x9cBcDf16521b3705687349278990015886c957c9",
+    "instructionSender": "0xf082D53B50D08f0fdC06B0B4C6A1932DB589d91f",
+    "ftsoPriceReader": "0xa8190FED2eF7c2cbC843904F974ae4F9EaF1fEA1",
+    "anchorDivergenceGuard": "0x7e4C125Aae919e3F25F0A4C63cED6D11F6ee3bbB",
+    "mockSparkDexRouter": "0x6F3A431c74Ef7Ff30ed93569D4e8A43466E7F9e1",
+    "mirrorFsaOnboarder": "0x899921CB2d74B45BDC95baC8b8675757dE952671",
+    "mirrorHealthAuth": "0xe7eBb372Ef34119874f55d2132e1f3F651e23612",
+    "mockKineticPool": "0x6ce64f1F6D60198281a4eA0aA639cAA10202554A",
+    "masterAccountController": "0x434936d47503353f06750Db1A444DBDC5F0AD37c",
+    "mockEnosysCDP": "0xB2f32371D761F52895E697C8b2910098cf57FA60",
+    "mockFirelightStrategy": "0xa652DFD628be13feC4D56710D1cf281692deCE02",
+    "firelightVaultReal": "0xC90D6847747b85d1fa2E07859869fb9fB72c0361"
   },
   "tokens": {
     "usdt0": "0xC1A5B41512496B80903D1f32d6dEa3a73212E71F",
     "fxrp": "0x0b6A3645c240605887a5532109323A3E12273dc7"
   },
   "executionVenue": "mock-sparkdex",
-  "deployedAt": "2026-08-11T07:49:36.563Z",
-  "deployer": "0xDe8E0C7d20E265594d5cB60277E249544af92cC4"
+  "deployedAt": "2026-08-12T01:52:01.954Z",
+  "deployer": "0xDe8E0C7d20E265594d5cB60277E249544af92cC4",
+  "sparkdexPoolFee": 500,
+  "mainnetReference": {
+    "note": "chain ID 14 only — do NOT use on Coston2",
+    "sparkdexSwapRouter": "0x8a1E35F5c98C4E85B36B7B253222eE17773b2781",
+    "sparkdexV3Factory": "0x8A2578d23d4C532cC9A98FaD91C0523f5efDE652",
+    "sparkdexFxrpUsdt0Pool": "0x88d46717b16619b37fa2dfd2f038defb4459f1f7",
+    "sparkdexPoolFee": 500
+  },
+  "blazeSwapPair": "0xa0B211953a3d8f42E82AfB01303933DdA5c434fe",
+  "blazeSwapNote": "self-seeded test liquidity — not third-party FXRP/USDT0 depth",
+  "fsa": {
+    "operators": [
+      "rEyj8nsHLdgt79KJWzXR5BgF7ZbaohbXwq"
+    ],
+    "xrplOperatorAddress": "rEyj8nsHLdgt79KJWzXR5BgF7ZbaohbXwq"
+  },
+  "deployedPhase89At": "2026-08-12T05:24:14.909Z",
+  "firelightVaultReal": "0xC90D6847747b85d1fa2E07859869fb9fB72c0361",
+  "firelightNote": "Real Firelight vault on Coston2 exists but passive-staking MVP uses MockFirelightStrategy; swap addresses later.",
+  "deployedPhase10At": "2026-08-12T05:55:40.760Z"
 }

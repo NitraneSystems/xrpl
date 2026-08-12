@@ -44,6 +44,13 @@ describe("MirrorLeaderboard", function () {
     ).to.be.revertedWithCustomError(leaderboard, "OnlyAiAgentSigner");
   });
 
+  it("reverts updateScore from a non-ai matching-engine-like signer", async function () {
+    const [, , , , matchingEngine] = await ethers.getSigners();
+    await expect(
+      leaderboard.connect(matchingEngine).updateScore(lead.address, 50, ethers.ZeroHash)
+    ).to.be.revertedWithCustomError(leaderboard, "OnlyAiAgentSigner");
+  });
+
   it("reverts invalid score over 100", async function () {
     await expect(
       leaderboard.connect(aiAgent).updateScore(lead.address, 101, ethers.ZeroHash)

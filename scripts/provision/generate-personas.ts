@@ -16,6 +16,8 @@ const PERSONAS = [
   { key: "follower-evm-1", index: 3, role: "Follower EVM wallet 1" },
   { key: "follower-evm-2", index: 4, role: "Follower EVM wallet 2" },
   { key: "follower-evm-3", index: 5, role: "Follower EVM wallet 3" },
+  { key: "follower-evm-4", index: 9, role: "Follower EVM wallet 4 (Phase 11 load)" },
+  { key: "follower-evm-5", index: 10, role: "Follower EVM wallet 5 (Phase 11 load)" },
   { key: "operator-relayer", index: 6, role: "Operator / relayer (Phase 5/8)" },
   { key: "tee-signing-key", index: 7, role: "PMW-controlled TEE signing key" },
   { key: "ai-agent-signer", index: 8, role: "AI Agent FCE signer (Phase 6)" },

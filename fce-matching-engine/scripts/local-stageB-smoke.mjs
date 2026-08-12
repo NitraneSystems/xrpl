@@ -96,6 +96,9 @@ async function main() {
       ...process.env,
       EXTENSION_PORT: PORT,
       FCE_PLAINTEXT_DECRYPT_FALLBACK: "1",
+      EXECUTION_VENUE: process.env.EXECUTION_VENUE ?? "mock-sparkdex",
+      MOCK_SPARKDEX_ROUTER_ADDRESS:
+        process.env.MOCK_SPARKDEX_ROUTER_ADDRESS || "0x000000000000000000000000000000000000dEaD",
       // Intentionally omit SIGN_PORT: ensures `decryptEnabled === false`.
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -118,12 +121,20 @@ async function main() {
     console.log(`POST /action → HTTP ${res.status}`);
 
     if (res.status !== 200) throw new Error(`Expected HTTP 200, got ${res.status}`);
-    if (body.status !== 1) throw new Error(`Expected action status 1 (success), got ${body.status}`);
-    if (typeof body.data !== "string" || !body.data.startsWith("0x") || body.data.length < 10) {
-      throw new Error("Expected returned calldata hex in body.data");
+    if (body.status !== 1) {
+      throw new Error(`Expected action status 1 (success), got ${body.status}: ${body.error ?? JSON.stringify(body)}`);
     }
+    if (typeof body.data !== "string" || !body.data.startsWith("0x") || body.data.length < 10) {
+      throw new Error("Expected returned payload hex in body.data");
+    }
+    const payload = JSON.parse(Buffer.from(body.data.slice(2), "hex").toString("utf8"));
+    if (!payload.to || !payload.data) throw new Error("payload missing to/data");
+    if (!String(payload.data).toLowerCase().startsWith("0x414bf389")) {
+      throw new Error(`expected exactInputSingle selector 0x414bf389, got ${String(payload.data).slice(0, 10)}`);
+    }
+    if (payload.fee !== 500) throw new Error(`expected fee 500, got ${payload.fee}`);
 
-    console.log("OK: Stage B handler returned calldata bytes");
+    console.log("OK: Stage B returned struct exactInputSingle calldata (fee 500)");
   } finally {
     child.kill("SIGTERM");
     await new Promise((r) => setTimeout(r, 500));

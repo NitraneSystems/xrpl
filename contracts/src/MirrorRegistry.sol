@@ -36,6 +36,7 @@ contract MirrorRegistry is Ownable {
     error AlreadyFollowing();
     error NotFollowing();
     error InvalidLead();
+    error OnlyFsaOnboarder();
 
     event LeadRegistered(
         address indexed wallet,
@@ -48,6 +49,7 @@ contract MirrorRegistry is Ownable {
     event LeadFollowed(address indexed follower, address indexed lead, uint256 allocation);
     event LeadUnfollowed(address indexed follower, address indexed lead);
     event LeadVerified(address indexed lead, bool verified);
+    event FsaOnboarderUpdated(address indexed previous, address indexed next);
 
     mapping(address => LeadTrader) public leads;
     mapping(address => FollowerProfile) public followers;
@@ -55,7 +57,20 @@ contract MirrorRegistry is Ownable {
     mapping(address => address[]) private _followerLeads;
     mapping(address => address[]) private _leadFollowers;
 
+    address public fsaOnboarder;
+
     constructor(address initialOwner) Ownable(initialOwner) {}
+
+    modifier onlyFsaOnboarder() {
+        if (msg.sender != fsaOnboarder) revert OnlyFsaOnboarder();
+        _;
+    }
+
+    function setFsaOnboarder(address onboarder) external onlyOwner {
+        address previous = fsaOnboarder;
+        fsaOnboarder = onboarder;
+        emit FsaOnboarderUpdated(previous, onboarder);
+    }
 
     function registerLead(
         uint8 strategyType,
@@ -79,38 +94,56 @@ contract MirrorRegistry is Ownable {
     }
 
     function registerFollower(uint8 riskProfile) external {
-        if (followers[msg.sender].registered) revert AlreadyRegisteredFollower();
+        _registerFollower(msg.sender, riskProfile);
+    }
 
-        followers[msg.sender] = FollowerProfile({
-            wallet: msg.sender,
+    /// @notice FSA onboarder registers a PersonalAccount as follower.
+    function registerFollowerAs(address follower, uint8 riskProfile) external onlyFsaOnboarder {
+        _registerFollower(follower, riskProfile);
+    }
+
+    function _registerFollower(address follower, uint8 riskProfile) internal {
+        if (followers[follower].registered) revert AlreadyRegisteredFollower();
+
+        followers[follower] = FollowerProfile({
+            wallet: follower,
             riskProfile: riskProfile,
             registered: true
         });
 
-        emit FollowerRegistered(msg.sender, riskProfile);
+        emit FollowerRegistered(follower, riskProfile);
     }
 
     function followLead(address lead, uint256 allocation) external {
-        FollowerProfile storage follower = followers[msg.sender];
-        if (!follower.registered) revert NotRegisteredFollower();
+        _followLead(msg.sender, lead, allocation);
+    }
+
+    /// @notice FSA onboarder follows a lead on behalf of a PersonalAccount.
+    function followLeadAs(address follower, address lead, uint256 allocation) external onlyFsaOnboarder {
+        _followLead(follower, lead, allocation);
+    }
+
+    function _followLead(address follower, address lead, uint256 allocation) internal {
+        FollowerProfile storage followerProfile = followers[follower];
+        if (!followerProfile.registered) revert NotRegisteredFollower();
 
         LeadTrader storage leadTrader = leads[lead];
         if (leadTrader.wallet == address(0)) revert InvalidLead();
         if (allocation < leadTrader.minAllocation) revert AllocationBelowMinimum();
 
-        FollowAllocation storage existing = followAllocations[msg.sender][lead];
+        FollowAllocation storage existing = followAllocations[follower][lead];
         if (existing.active) revert AlreadyFollowing();
 
-        followAllocations[msg.sender][lead] = FollowAllocation({
+        followAllocations[follower][lead] = FollowAllocation({
             lead: lead,
             allocation: allocation,
             active: true
         });
 
-        _followerLeads[msg.sender].push(lead);
-        _leadFollowers[lead].push(msg.sender);
+        _followerLeads[follower].push(lead);
+        _leadFollowers[lead].push(follower);
 
-        emit LeadFollowed(msg.sender, lead, allocation);
+        emit LeadFollowed(follower, lead, allocation);
     }
 
     function unfollowLead(address lead) external {

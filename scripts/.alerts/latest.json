@@ -1,0 +1,18 @@
+[
+  {
+    "type": "drift",
+    "lead": "0xDriftLead000000000000000000000000000001",
+    "message": "Drift detected: baseline momentum → mean-reversion (confidence 0.97)",
+    "meta": {
+      "lead": "0xDriftLead000000000000000000000000000001",
+      "baseline": 0,
+      "live": "mean-reversion",
+      "liveCode": 1,
+      "confidence": 0.9666666666666667,
+      "drifted": true,
+      "cycle": 50,
+      "threshold": 0.55
+    },
+    "at": "2026-08-12T06:05:57.698Z"
+  }
+]
