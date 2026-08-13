@@ -12,6 +12,7 @@ import { Client, type TransactionStream } from "xrpl";
 import {
   createPublicClient,
   createWalletClient,
+  decodeErrorResult,
   http,
   parseAbi,
   getAddress,
@@ -92,6 +93,48 @@ async function loadOperatorAddress(): Promise<string> {
   return wallets[0]!;
 }
 
+const MAC_ERRORS = parseAbi([
+  "error FAssetBalanceTooLow()",
+  "error TransactionAlreadyExecuted()",
+  "error InvalidReceivingAddress()",
+  "error InvalidSourceAddress()",
+  "error ValueZero()",
+  "error InvalidInstructionId(uint8)",
+  "error InvalidMemoData()",
+  "error CallFailed(bytes)",
+]);
+
+function revertDataOf(err: unknown): `0x${string}` | undefined {
+  let cur: any = err;
+  for (let i = 0; i < 6 && cur; i++) {
+    if (typeof cur.data === "string" && cur.data.startsWith("0x") && cur.data.length >= 10) {
+      return cur.data as `0x${string}`;
+    }
+    cur = cur.cause;
+  }
+  return undefined;
+}
+
+function decodeMacRevert(err: unknown): string {
+  const data = revertDataOf(err);
+  if (data) {
+    try {
+      const decoded = decodeErrorResult({ abi: MAC_ERRORS, data });
+      if (decoded.errorName === "FAssetBalanceTooLow") {
+        return "FAssetBalanceTooLow: the PersonalAccount has 0 FXRP. executeInstruction(transfer) cannot mint; it only moves FXRP already minted via FAssets Core Vault. Coston2 Core Vault mint liquidity is often empty.";
+      }
+      return `executeInstruction reverted: ${decoded.errorName}`;
+    } catch {
+      if (data.slice(0, 10).toLowerCase() === "0xdb7b48e3") {
+        return "FAssetBalanceTooLow: the PersonalAccount has 0 FXRP. executeInstruction(transfer) cannot mint; it only moves already-minted FXRP.";
+      }
+      return `executeInstruction reverted ${data.slice(0, 10)}`;
+    }
+  }
+  const anyErr = err as { shortMessage?: string; message?: string };
+  return anyErr.shortMessage ?? anyErr.message ?? "executeInstruction simulation failed";
+}
+
 async function executeInstructionOnMac(opts: {
   proof: Awaited<ReturnType<typeof attestXrplPayment>>;
   xrplAddress: string;
@@ -129,16 +172,37 @@ async function executeInstructionOnMac(opts: {
     fee = 0n;
   }
 
-  const hash = await wallet.writeContract({
+  const execArgs = {
     address: mac,
     abi,
-    functionName: "executeInstruction",
-    args: [proofTuple as never, opts.xrplAddress],
+    functionName: "executeInstruction" as const,
+    args: [proofTuple as never, opts.xrplAddress] as const,
     value: fee > 0n && fee < 10n ** 18n ? fee : 0n,
     gas: 2_000_000n,
-  });
+    account,
+  };
+
+  try {
+    await publicClient.simulateContract(execArgs);
+  } catch (e) {
+    const decoded = decodeMacRevert(e);
+    if (/TransactionAlreadyExecuted/i.test(decoded)) {
+      const personalAccount = (await publicClient.readContract({
+        address: mac,
+        abi,
+        functionName: "getPersonalAccount",
+        args: [opts.xrplAddress],
+      })) as Address;
+      return { hash: "already-executed" as Hex, personalAccount };
+    }
+    throw new Error(decoded);
+  }
+
+  const hash = await wallet.writeContract(execArgs);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  if (receipt.status !== "success") throw new Error(`executeInstruction failed ${hash}`);
+  if (receipt.status !== "success") {
+    throw new Error(`executeInstruction reverted on-chain ${hash}`);
+  }
 
   const personalAccount = (await publicClient.readContract({
     address: mac,
@@ -222,11 +286,13 @@ async function runProcessPayment(opts: {
       args: [personalAccount, lead],
     })) as bigint;
     st.vaultBalance = bal.toString();
-    st.state = bal > 0n ? "sub_account_active" : "minting_fxrp";
+    // executeInstruction success = PersonalAccount is live. Vault follow is a separate onboard()
+    // call; do not leave the UI stuck on minting_fxrp when vault balance is still 0.
+    st.state = "sub_account_active";
     if (bal === 0n) {
       st.message =
         (st.message ?? "") +
-        " — PersonalAccount ready; complete custom-instruction onboard for Mirror vault credit";
+        ` — PersonalAccount ${personalAccount} is active. Mirror vault follow still needs onboard().`;
     }
     persist(st);
     return st;

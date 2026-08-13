@@ -35,9 +35,9 @@ export function encodeFxrpTransferReference(opts: {
   const typeCmd = 0x01; // type 0 (FXRP), command 1 (transfer)
   const walletId = opts.walletId ?? 0;
   const recipient = pad(opts.recipient, { size: 20 });
-  // Layout: [typeCmd:1][walletId:1][recipient:20][value:10]  = 32 bytes
+  // Flare layout: [typeCmd:1][walletId:1][value:10][recipient:20]
   const valueHex = pad(toHex(opts.valueDrops), { size: 10 });
-  return concat([toHex(typeCmd, { size: 1 }), toHex(walletId, { size: 1 }), recipient, valueHex]) as Hex;
+  return concat([toHex(typeCmd, { size: 1 }), toHex(walletId, { size: 1 }), valueHex, recipient]) as Hex;
 }
 
 /** Deliberately malformed 32-byte reference for rejection tests. */
