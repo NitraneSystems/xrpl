@@ -9,8 +9,8 @@ After this deploy you can test the product in the browser at `https://your-app.v
 | UI (`frontend/`) | **Vercel** |
 | Alerts (`/api/alerts`) | **Vercel** (same app) |
 | Registry / Vault / Leaderboard / InstructionSender | **Coston2** (already deployed) |
-| Matching-engine FCE (`npm start` / Docker) | FCC / local / VPS — optional for UI testing |
-| XRPL monitor (`npm run xrpl:monitor`) | Local / Railway / Fly — only for `/follower/xrpl` live tracking |
+| Matching-engine FCE | [Google Cloud Run](./CLOUD-RUN.md) from [NitraneSystems/matching](https://github.com/NitraneSystems/matching) |
+| XRPL monitor | [Google Cloud Run](./CLOUD-RUN.md) from [NitraneSystems/xrpl](https://github.com/NitraneSystems/xrpl) |
 
 ---
 

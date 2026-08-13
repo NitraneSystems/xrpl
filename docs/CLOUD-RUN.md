@@ -2,7 +2,28 @@
 
 Two HTTP services. After they are live, paste the HTTPS URLs into Vercel env (see bottom).
 
-Build **from the repo root** (`c:\Users\MSI\Desktop\mirror`).
+Build **from the repo root**. Cloud Run is wired to **two copies of this same monorepo** (full codebase in each — Dockerfiles pick the service):
+
+| Service | GitHub (Cloud Run source) | Dockerfile |
+|---------|---------------------------|------------|
+| Matching engine | [NitraneSystems/matching](https://github.com/NitraneSystems/matching) | `deploy/cloudrun/matching-engine.Dockerfile` |
+| XRPL monitor | [NitraneSystems/xrpl](https://github.com/NitraneSystems/xrpl) | `deploy/cloudrun/xrpl-monitor.Dockerfile` |
+
+Canonical app repo remains [Marshal-AM/mirror](https://github.com/Marshal-AM/mirror). Push `main` to all three when deploying:
+
+```bash
+git push origin main
+git push matching main
+git push xrpl main
+```
+
+Remotes:
+
+- `origin` → `https://github.com/Marshal-AM/mirror.git`
+- `matching` → `https://github.com/NitraneSystems/matching.git`
+- `xrpl` → `https://github.com/NitraneSystems/xrpl.git`
+
+In Cloud Run “continuously deploy from GitHub”, connect those two NitraneSystems repos and set the Dockerfile path above. Do **not** put `.env` private keys in GitHub — use Cloud Run env/secrets.
 
 ---
 
