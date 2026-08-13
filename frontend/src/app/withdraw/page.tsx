@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { parseEther } from "viem";
+import { parseUnits } from "viem";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { config } from "@/lib/config";
+import { config, FXRP_DECIMALS } from "@/lib/config";
 import { vaultAbi } from "@/lib/abis";
 
 export default function WithdrawPage() {
@@ -18,7 +18,7 @@ export default function WithdrawPage() {
       address: config.vault,
       abi: vaultAbi,
       functionName: "requestWithdrawal",
-      args: [lead as `0x${string}`, parseEther(amount || "0")],
+      args: [lead as `0x${string}`, parseUnits(amount || "0", FXRP_DECIMALS)],
     });
   }
 

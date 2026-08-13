@@ -10,8 +10,8 @@ import { register, reportState } from "./app/handlers.js";
 import { Server } from "./base/server.js";
 
 async function main(): Promise<void> {
-  // Defaults match go/internal/config/config.go.
-  const extPort = process.env.EXTENSION_PORT ?? "8080";
+  // Cloud Run injects PORT. FCC/local still use EXTENSION_PORT.
+  const extPort = process.env.PORT ?? process.env.EXTENSION_PORT ?? "8080";
   const signPort = process.env.SIGN_PORT ?? "9090";
 
   const server = new Server(extPort, signPort, VERSION, register, reportState);

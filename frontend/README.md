@@ -10,6 +10,8 @@ npm install
 npm run dev -w frontend
 ```
 
+Production (Vercel): see [docs/VERCEL.md](../docs/VERCEL.md). Root Directory must be `frontend`.
+
 Addresses default from `config/coston2.json` via `NEXT_PUBLIC_MIRROR_*`.
 
 `NEXT_PUBLIC_TEE_ENCRYPT_PUBKEY` must be a base64 SPKI RSA public key. The signal page refuses to submit if it is missing (no plaintext fallback).

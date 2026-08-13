@@ -63,8 +63,8 @@ export class Server {
       this.server = http.createServer((req, res) => {
         void this.serve(req, res);
       });
-      this.server.listen(this.extPort, () => {
-        console.log(`extension listening on port ${this.extPort}`);
+      this.server.listen(this.extPort, "0.0.0.0", () => {
+        console.log(`extension listening on 0.0.0.0:${this.extPort}`);
         resolve();
       });
     });
@@ -90,6 +90,12 @@ export class Server {
   ): Promise<[number, unknown]> {
     const clean = path.split("?")[0];
 
+    if (clean === "/health" || clean === "/") {
+      if (method === "GET" || method === "HEAD") {
+        return [200, { ok: true, service: "mirror-matching-engine" }];
+      }
+      return [405, "method not allowed"];
+    }
     if (clean === "/action") {
       if (method === "POST") return this.processAction(body);
       return [405, "method not allowed"];
@@ -220,6 +226,10 @@ export class Server {
       }
     }
 
+    if (req.method === "OPTIONS") {
+      return sendCorsPreflight(res);
+    }
+
     let body = "";
     try {
       body = await readBody(req);
@@ -245,12 +255,26 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
+function corsHeaders(): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
+function sendCorsPreflight(res: http.ServerResponse): void {
+  res.writeHead(204, corsHeaders());
+  res.end();
+}
+
 function send(res: http.ServerResponse, status: number, payload: unknown): void {
   const isText = typeof payload === "string";
   const body = isText ? (payload as string) : JSON.stringify(payload);
   res.writeHead(status, {
     "Content-Type": isText ? "text/plain" : "application/json",
     "Content-Length": Buffer.byteLength(body),
+    ...corsHeaders(),
   });
   res.end(body);
 }

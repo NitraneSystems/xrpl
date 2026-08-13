@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther } from "viem";
-import { config, RISK_LABELS } from "@/lib/config";
+import { parseUnits } from "viem";
+import { config, RISK_LABELS, FXRP_DECIMALS } from "@/lib/config";
 import { registryAbi, vaultAbi, erc20Abi } from "@/lib/abis";
 
 export default function FollowerOnboardPage() {
@@ -29,7 +29,7 @@ export default function FollowerOnboardPage() {
         args: [risk],
       });
 
-      const amt = parseEther(amount || "0");
+      const amt = parseUnits(amount || "0", FXRP_DECIMALS);
       if (lead && amt > 0n) {
         const leadAddr = lead as `0x${string}`;
         setStep("approve");

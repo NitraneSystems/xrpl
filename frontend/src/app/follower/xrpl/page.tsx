@@ -132,6 +132,11 @@ export default function XrplOnboardPage() {
         No C2FLR required. Pay the Mirror operator on XRPL testnet with the generated 32-byte reference,
         then the monitor requests an FDC Payment proof and submits it to MasterAccountController.
       </p>
+      {!config.monitorUrl && (
+        <p className="err">
+          XRPL monitor URL not set. Deploy Cloud Run and set NEXT_PUBLIC_XRPL_MONITOR_URL on Vercel.
+        </p>
+      )}
 
       <div className="form-panel">
         <label>

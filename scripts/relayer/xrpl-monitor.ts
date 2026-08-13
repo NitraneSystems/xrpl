@@ -25,8 +25,10 @@ import { attestXrplPayment, resolveMasterAccountController } from "./fdc-payment
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 dotenv.config({ path: join(ROOT, ".env") });
 
-const STATUS_DIR = join(ROOT, "scripts/.fsa-status");
-const PORT = Number(process.env.XRPL_MONITOR_PORT ?? 8787);
+const STATUS_DIR =
+  process.env.FSA_STATUS_DIR ??
+  (process.env.K_SERVICE ? "/tmp/mirror-fsa-status" : join(ROOT, "scripts/.fsa-status"));
+const PORT = Number(process.env.PORT ?? process.env.XRPL_MONITOR_PORT ?? 8787);
 
 export type StepperState =
   | "waiting_xrpl"
@@ -212,6 +214,8 @@ export async function processPayment(opts: {
 function startStatusServer() {
   const server = createServer((req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
@@ -253,8 +257,8 @@ function startStatusServer() {
     res.writeHead(404);
     res.end("not found");
   });
-  server.listen(PORT, "127.0.0.1", () => {
-    console.log(`FSA status API http://127.0.0.1:${PORT}/status/:xrplAddress`);
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`FSA status API http://0.0.0.0:${PORT}/status/:xrplAddress`);
   });
   return server;
 }
@@ -263,14 +267,16 @@ async function watch() {
   const operator = await loadOperatorAddress();
   console.log(`Watching XRPL operator ${operator}`);
 
-  // Persist operator into config for UI
-  try {
-    const cfgPath = join(ROOT, "config/coston2.json");
-    const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
-    cfg.fsa = { ...(cfg.fsa ?? {}), xrplOperatorAddress: operator, operators: [operator] };
-    writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
-  } catch {
-    /* optional */
+  // Local only: persist operator into config for UI. Cloud Run filesystem is read-only.
+  if (!process.env.K_SERVICE) {
+    try {
+      const cfgPath = join(ROOT, "config/coston2.json");
+      const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+      cfg.fsa = { ...(cfg.fsa ?? {}), xrplOperatorAddress: operator, operators: [operator] };
+      writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
+    } catch {
+      /* optional */
+    }
   }
 
   startStatusServer();

@@ -1,5 +1,6 @@
 export const STRATEGY_LABELS = ["momentum", "mean-reversion", "yield-arb"] as const;
 export const RISK_LABELS = ["conservative", "moderate", "aggressive"] as const;
+export const FXRP_DECIMALS = 6;
 
 export const config = {
   chainId: 114,
@@ -26,6 +27,7 @@ export const config = {
     "0x0b6A3645c240605887a5532109323A3E12273dc7") as `0x${string}`,
   teeEncryptPubKey: process.env.NEXT_PUBLIC_TEE_ENCRYPT_PUBKEY ?? "",
   xrplOperator: process.env.NEXT_PUBLIC_XRPL_OPERATOR_ADDRESS ?? "rEyj8nsHLdgt79KJWzXR5BgF7ZbaohbXwq",
-  monitorUrl: process.env.NEXT_PUBLIC_XRPL_MONITOR_URL ?? "http://127.0.0.1:8787",
-  alertsUrl: process.env.NEXT_PUBLIC_MIRROR_ALERTS_URL ?? "http://127.0.0.1:8790/alerts",
+  monitorUrl: (process.env.NEXT_PUBLIC_XRPL_MONITOR_URL ?? "").replace(/\/$/, ""),
+  matchingEngineUrl: (process.env.NEXT_PUBLIC_MATCHING_ENGINE_URL ?? "").replace(/\/$/, ""),
+  alertsUrl: process.env.NEXT_PUBLIC_MIRROR_ALERTS_URL ?? "/api/alerts",
 };
