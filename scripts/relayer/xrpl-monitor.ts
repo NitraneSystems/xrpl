@@ -154,16 +154,47 @@ async function executeInstructionOnMac(opts: {
   return { hash, personalAccount };
 }
 
+const inflight = new Map<string, Promise<PaymentStatus>>();
+
+function paymentKey(txHash: string) {
+  return txHash.replace(/^0x/i, "").toLowerCase();
+}
+
 export async function processPayment(opts: {
   xrplAddress: string;
   txHash: string;
   lead?: Address;
 }) {
+  const key = paymentKey(opts.txHash);
+  const existing = inflight.get(key);
+  if (existing) return existing;
+
+  const cached = getStatus(opts.xrplAddress);
+  if (
+    cached &&
+    cached.txHash &&
+    paymentKey(cached.txHash) === key &&
+    (cached.state === "minting_fxrp" || cached.state === "sub_account_active")
+  ) {
+    return cached;
+  }
+
+  const run = runProcessPayment(opts).finally(() => inflight.delete(key));
+  inflight.set(key, run);
+  return run;
+}
+
+async function runProcessPayment(opts: {
+  xrplAddress: string;
+  txHash: string;
+  lead?: Address;
+}): Promise<PaymentStatus> {
   const st: PaymentStatus = {
     xrplAddress: opts.xrplAddress,
     txHash: opts.txHash,
     state: "requesting_fdc",
     updatedAt: new Date().toISOString(),
+    message: "Requesting FDC Payment attestation (one round, typically 1–3 min)",
   };
   persist(st);
 
@@ -237,18 +268,26 @@ function startStatusServer() {
     if (url.pathname === "/process" && req.method === "POST") {
       let body = "";
       req.on("data", (c) => (body += c));
-      req.on("end", async () => {
+      req.on("end", () => {
         try {
           const j = JSON.parse(body) as { xrplAddress: string; txHash: string; lead?: string };
-          const st = await processPayment({
+          if (!j.xrplAddress || !j.txHash) throw new Error("xrplAddress and txHash required");
+          void processPayment({
             xrplAddress: j.xrplAddress,
             txHash: j.txHash,
             lead: j.lead as Address | undefined,
-          });
-          res.writeHead(200, { "Content-Type": "application/json" });
+          }).catch((e) => console.error("processPayment", e));
+          const st = getStatus(j.xrplAddress) ?? {
+            xrplAddress: j.xrplAddress,
+            txHash: j.txHash,
+            state: "requesting_fdc" as StepperState,
+            message: "Requesting FDC Payment attestation (one round, typically 1–3 min)",
+            updatedAt: new Date().toISOString(),
+          };
+          res.writeHead(202, { "Content-Type": "application/json" });
           res.end(JSON.stringify(st));
         } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
+          res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
         }
       });

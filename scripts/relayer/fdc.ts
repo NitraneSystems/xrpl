@@ -88,12 +88,35 @@ export async function prepareEvmTxRequest(transactionHash: string) {
   return (await res.json()) as { abiEncodedRequest: Hex; status?: string };
 }
 
+function isNonceRace(err: unknown): boolean {
+  const msg = err instanceof Error ? `${err.message} ${err.cause ?? ""}` : String(err);
+  return /replacement transaction underpriced|nonce too low|already known|replacement underpriced/i.test(msg);
+}
+
+/** One attestation at a time per process so matching/XRPL don't share a nonce in-process. */
+let attestationGate: Promise<void> = Promise.resolve();
+
+async function waitForPendingNonce(
+  publicClient: ReturnType<typeof createPublicClient>,
+  address: Address,
+) {
+  for (let i = 0; i < 40; i++) {
+    const latest = await publicClient.getTransactionCount({ address, blockTag: "latest" });
+    const pending = await publicClient.getTransactionCount({ address, blockTag: "pending" });
+    if (pending <= latest) return;
+    console.log(`waiting for ${pending - latest} pending tx(s) from ${address} (nonce ${latest}→${pending})`);
+    await sleep(3_000);
+  }
+  throw new Error(`deployer ${address} still has pending txs after 2m — not sending a replacement`);
+}
+
 export async function requestAttestation(
   publicClient: ReturnType<typeof createPublicClient>,
   wallet: ReturnType<typeof createWalletClient>,
   account: { address: Address } & Record<string, unknown>,
   abiEncodedRequest: Hex
 ) {
+  const run = async () => {
   const fdcHub = await registryAddress(publicClient, "FdcHub");
   const feeCfg = await registryAddress(publicClient, "FdcRequestFeeConfigurations");
   const fee = (await publicClient.readContract({
@@ -103,15 +126,45 @@ export async function requestAttestation(
     args: [abiEncodedRequest],
   })) as bigint;
 
-  const hash = await wallet.writeContract({
-    address: fdcHub,
-    abi: FDC_HUB_ABI,
-    functionName: "requestAttestation",
-    args: [abiEncodedRequest],
-    value: fee,
-    gas: 1_000_000n,
-    account: account as never,
-  });
+  await waitForPendingNonce(publicClient, account.address);
+
+  const fees = await publicClient.estimateFeesPerGas().catch(() => ({
+    maxFeePerGas: 50_000_000_000n,
+    maxPriorityFeePerGas: 2_000_000_000n,
+  }));
+  let maxPriorityFeePerGas = (fees.maxPriorityFeePerGas ?? 2_000_000_000n) * 2n;
+  let maxFeePerGas = (fees.maxFeePerGas ?? 50_000_000_000n) * 2n;
+  if (maxFeePerGas < maxPriorityFeePerGas) maxFeePerGas = maxPriorityFeePerGas * 2n;
+
+  let hash: Hex | undefined;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const nonce = await publicClient.getTransactionCount({
+        address: account.address,
+        blockTag: "pending",
+      });
+      hash = await wallet.writeContract({
+        address: fdcHub,
+        abi: FDC_HUB_ABI,
+        functionName: "requestAttestation",
+        args: [abiEncodedRequest],
+        value: fee,
+        gas: 1_000_000n,
+        nonce,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        account: account as never,
+      });
+      break;
+    } catch (e) {
+      if (!isNonceRace(e) || attempt === 4) throw e;
+      console.warn(`requestAttestation nonce race (attempt ${attempt + 1}/5), bumping fees`);
+      await waitForPendingNonce(publicClient, account.address);
+      maxPriorityFeePerGas = (maxPriorityFeePerGas * 15n) / 10n;
+      maxFeePerGas = (maxFeePerGas * 15n) / 10n;
+    }
+  }
+  if (!hash) throw new Error("requestAttestation did not submit");
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error(`requestAttestation reverted tx=${hash}`);
   const block = await publicClient.getBlock({ blockNumber: receipt.blockNumber });
@@ -129,6 +182,14 @@ export async function requestAttestation(
   })) as bigint;
   const roundId = Number((block.timestamp - first) / duration);
   return { hash, roundId, fee };
+  };
+
+  const next = attestationGate.then(run, run);
+  attestationGate = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
 }
 
 function sleep(ms: number) {

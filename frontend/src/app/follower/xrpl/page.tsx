@@ -108,10 +108,10 @@ export default function XrplOnboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ xrplAddress, txHash, lead: lead || undefined }),
       });
-      const j = await res.json();
+      const j = (await res.json()) as { error?: string; state?: Step; message?: string };
       if (!res.ok) throw new Error(j.error ?? res.statusText);
       setStep(j.state ?? "requesting_fdc");
-      setMessage(j.message ?? "");
+      setMessage(j.message ?? "FDC round in progress — typically 1–3 minutes, do not resubmit.");
     } catch (e) {
       setStep("failed");
       setErr(e instanceof Error ? e.message : String(e));
@@ -234,6 +234,12 @@ export default function XrplOnboardPage() {
         </ol>
         {message && <p className="ok">{message}</p>}
         {err && <p className="err">{err}</p>}
+        {(step === "requesting_fdc" || step === "waiting_xrpl" || step === "minting_fxrp") && (
+          <p className="muted">
+            FDC attestation waits for the next Flare voting round (~90s) plus DA proof. Leave this
+            tab open; do not click Track again.
+          </p>
+        )}
         <p className="muted" style={{ marginTop: "1rem" }}>
           Prefer the EVM path? <Link href="/follower/onboard">Follower onboarding</Link>
         </p>
