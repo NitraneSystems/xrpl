@@ -290,12 +290,23 @@ export async function waitForDaProof(
       body: JSON.stringify(payload),
     });
     proof = (await res.json()) as { response_hex?: string; proof?: Hex[]; merkleProof?: Hex[] };
-    if (proof.response_hex) break;
+    const p = proof as Record<string, any>;
+    if (proof.response_hex || p.responseHex || p.data?.response_hex || p.data?.responseHex) break;
     console.log("waiting for DA layer proof...");
     await sleep(5_000);
   }
-  if (!proof.response_hex) throw new Error("DA layer did not return response_hex");
-  return { response_hex: proof.response_hex, proof: proof.proof ?? proof.merkleProof ?? [] };
+  const anyProof = proof as Record<string, any>;
+  const responseHex =
+    proof.response_hex ?? anyProof.responseHex ?? anyProof.data?.response_hex ?? anyProof.data?.responseHex;
+  if (!responseHex) throw new Error("DA layer did not return response_hex");
+  const merkleRaw =
+    (Array.isArray(proof.proof) && proof.proof) ||
+    (Array.isArray(anyProof.merkleProof) && anyProof.merkleProof) ||
+    (Array.isArray(anyProof.data?.proof) && anyProof.data.proof) ||
+    (Array.isArray(anyProof.data?.merkleProof) && anyProof.data.merkleProof) ||
+    (Array.isArray(anyProof.proof?.merkleProof) && anyProof.proof.merkleProof) ||
+    [];
+  return { response_hex: responseHex, proof: merkleRaw as Hex[] };
 }
 
 export async function retrieveProof(

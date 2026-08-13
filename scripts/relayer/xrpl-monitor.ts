@@ -20,7 +20,12 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { coston2 } from "../lib/chain.ts";
-import { attestXrplPayment, resolveMasterAccountController } from "./fdc-payment.ts";
+import {
+  attestXrplPayment,
+  resolveMasterAccountController,
+  EXECUTE_INSTRUCTION_ABI,
+  toPaymentProofArg,
+} from "./fdc-payment.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 dotenv.config({ path: join(ROOT, ".env") });
@@ -102,22 +107,13 @@ async function executeInstructionOnMac(opts: {
   const wallet = createWalletClient({ account, chain: coston2, transport: http(rpc) });
   const mac = await resolveMasterAccountController();
 
-  // Build IPayment.Proof tuple: (merkleProof, data)
-  const data = opts.proof.data as any;
-  const proofTuple = {
-    merkleProof: opts.proof.merkleProof,
-    data: {
-      attestationType: data.attestationType,
-      sourceId: data.sourceId,
-      votingRound: data.votingRound,
-      lowestUsedTimestamp: data.lowestUsedTimestamp,
-      requestBody: data.requestBody,
-      responseBody: data.responseBody,
-    },
-  };
+  const proofTuple = toPaymentProofArg(opts.proof);
+  if (!proofTuple.merkleProof.length) {
+    throw new Error("FDC DA proof missing merkleProof — cannot executeInstruction");
+  }
 
   const abi = parseAbi([
-    "function executeInstruction(((bytes32[] merkleProof,(bytes32 attestationType,bytes32 sourceId,uint64 votingRound,uint64 lowestUsedTimestamp,(bytes32 transactionId,uint256 inUtxo,uint256 utxo) requestBody,(uint64 blockNumber,uint64 blockTimestamp,bytes32 sourceAddressHash,bytes32 sourceAddressesRoot,bytes32 receivingAddressHash,bytes32 intendedReceivingAddressHash,int256 spentAmount,int256 intendedSpentAmount,int256 receivedAmount,int256 intendedReceivedAmount,bytes32 standardPaymentReference,bool oneToOne,uint8 status) responseBody) data)) _proof, string _xrplAddress) payable",
+    ...EXECUTE_INSTRUCTION_ABI,
     "function getPersonalAccount(string) view returns (address)",
     "function getDefaultInstructionFee() view returns (uint256)",
   ]);

@@ -159,13 +159,65 @@ export async function resolveMasterAccountController(): Promise<Address> {
   return (await registryAddress(publicClient, "MasterAccountController")) as Address;
 }
 
+/** IPayment.Proof — single tuple, not double-wrapped. Extra parens make viem read merkleProof on undefined. */
+export const EXECUTE_INSTRUCTION_ABI = [
+  "function executeInstruction((bytes32[] merkleProof,(bytes32 attestationType,bytes32 sourceId,uint64 votingRound,uint64 lowestUsedTimestamp,(bytes32 transactionId,uint256 inUtxo,uint256 utxo) requestBody,(uint64 blockNumber,uint64 blockTimestamp,bytes32 sourceAddressHash,bytes32 sourceAddressesRoot,bytes32 receivingAddressHash,bytes32 intendedReceivingAddressHash,int256 spentAmount,int256 intendedSpentAmount,int256 receivedAmount,int256 intendedReceivedAmount,bytes32 standardPaymentReference,bool oneToOne,uint8 status) responseBody) data) _proof, string _xrplAddress) payable",
+] as const;
+
 export const MASTER_ACCOUNT_ABI = parseAbi([
   "function getPersonalAccount(string _xrplOwner) view returns (address)",
-  "function executeInstruction((bytes32[],(bytes32,bytes32,uint64,uint64,(bytes32,uint256,uint256),(uint64,uint64,bytes32,bytes32,bytes32,bytes32,int256,int256,int256,int256,bytes32,bool,uint8))) _proof, string _xrplAddress) payable",
+  ...EXECUTE_INSTRUCTION_ABI,
   "function isTransactionIdUsed(bytes32 _transactionId) view returns (bool)",
   "function getInstructionFee(uint256 _instructionId) view returns (uint256)",
   "function getDefaultInstructionFee() view returns (uint256)",
 ]);
+
+function pick(obj: any, key: string, idx: number) {
+  if (obj == null) return undefined;
+  if (obj[key] !== undefined) return obj[key];
+  return obj[idx];
+}
+
+/** Normalize DA/decode shapes into the IPayment.Proof object viem expects. */
+export function toPaymentProofArg(proof: PaymentProof) {
+  const data: any = proof.data;
+  const rb = pick(data, "requestBody", 4) ?? {};
+  const body = pick(data, "responseBody", 5) ?? {};
+  const merkle = Array.isArray(proof.merkleProof)
+    ? proof.merkleProof
+    : Array.isArray((proof as any).proof)
+      ? (proof as any).proof
+      : [];
+  return {
+    merkleProof: merkle,
+    data: {
+      attestationType: pick(data, "attestationType", 0),
+      sourceId: pick(data, "sourceId", 1),
+      votingRound: BigInt(pick(data, "votingRound", 2) ?? 0),
+      lowestUsedTimestamp: BigInt(pick(data, "lowestUsedTimestamp", 3) ?? 0),
+      requestBody: {
+        transactionId: pick(rb, "transactionId", 0),
+        inUtxo: BigInt(pick(rb, "inUtxo", 1) ?? 0),
+        utxo: BigInt(pick(rb, "utxo", 2) ?? 0),
+      },
+      responseBody: {
+        blockNumber: BigInt(pick(body, "blockNumber", 0) ?? 0),
+        blockTimestamp: BigInt(pick(body, "blockTimestamp", 1) ?? 0),
+        sourceAddressHash: pick(body, "sourceAddressHash", 2),
+        sourceAddressesRoot: pick(body, "sourceAddressesRoot", 3),
+        receivingAddressHash: pick(body, "receivingAddressHash", 4),
+        intendedReceivingAddressHash: pick(body, "intendedReceivingAddressHash", 5),
+        spentAmount: BigInt(pick(body, "spentAmount", 6) ?? 0),
+        intendedSpentAmount: BigInt(pick(body, "intendedSpentAmount", 7) ?? 0),
+        receivedAmount: BigInt(pick(body, "receivedAmount", 8) ?? 0),
+        intendedReceivedAmount: BigInt(pick(body, "intendedReceivedAmount", 9) ?? 0),
+        standardPaymentReference: pick(body, "standardPaymentReference", 10),
+        oneToOne: Boolean(pick(body, "oneToOne", 11)),
+        status: Number(pick(body, "status", 12) ?? 0),
+      },
+    },
+  };
+}
 
 async function cli() {
   const txId = process.argv[2];
